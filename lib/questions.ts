@@ -28,6 +28,12 @@ export const questions: Question[] = [
     type: 'user_input',
   },
   {
+    id: 'battery',
+    label: 'سلامت باتری',
+    prompt: '🔋 سلامت باتری را وارد کنید (مثال: ۸۵٪):',
+    type: 'user_input',
+  },
+  {
     id: 'icloud',
     label: 'قفل ایکلود',
     prompt: '🔒 قفل ایکلود:',
@@ -39,7 +45,7 @@ export const questions: Question[] = [
     label: 'خط و خش',
     prompt: '🔍 خط و خش:',
     type: 'button',
-    options: ['جزیی', 'کم', 'زیاد'],
+    options: ['جزیی', 'کم', 'زیاد', 'ندارد'],
   },
   {
     id: 'dents',
@@ -54,12 +60,6 @@ export const questions: Question[] = [
     prompt: '⚙️ مشکل سخت‌افزاری:',
     type: 'button',
     options: ['دارد', 'ندارد'],
-  },
-  {
-    id: 'battery',
-    label: 'سلامت باتری',
-    prompt: '🔋 سلامت باتری را وارد کنید (مثال: ۸۵٪):',
-    type: 'user_input',
   },
   {
     id: 'box',

@@ -39,7 +39,7 @@ async function finish(chatId: number, session: Session): Promise<void> {
   await Promise.all([sendToGroup(summary), deleteSession(chatId)]);
   await sendMessage(
     chatId,
-    '✅ اطلاعات با موفقیت ارسال شد!\n\nبرای شروع مجدد /start را ارسال کنید.'
+    '✅ اطلاعات با موفقیت ارسال شد و بزودی به شما پاسخ خواهیم داد!\n\nبرای شروع مجدد /start را ارسال کنید.'
   );
 }
 
