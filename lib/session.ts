@@ -1,8 +1,15 @@
 import { Redis } from '@upstash/redis';
 
+export interface TelegramUser {
+  id: number;
+  firstName: string;
+  username?: string;
+}
+
 export interface Session {
   step: number;
   answers: Record<string, string>;
+  user: TelegramUser;
 }
 
 const redis = new Redis({

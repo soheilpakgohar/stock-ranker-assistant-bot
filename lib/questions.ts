@@ -56,6 +56,12 @@ export const questions: Question[] = [
     options: ['دارد', 'ندارد'],
   },
   {
+    id: 'battery',
+    label: 'سلامت باتری',
+    prompt: '🔋 سلامت باتری را وارد کنید (مثال: ۸۵٪):',
+    type: 'user_input',
+  },
+  {
     id: 'box',
     label: 'پک اصلی',
     prompt: '📦 پک اصلی:',

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { questions } from '@/lib/questions';
-import { getSession, saveSession, deleteSession, Session } from '@/lib/session';
+import { getSession, saveSession, deleteSession, Session, TelegramUser } from '@/lib/session';
 import {
   sendMessage,
   answerCallbackQuery,
   sendToGroup,
   buildInlineKeyboard,
+  escapeHtml,
 } from '@/lib/telegram';
 
 async function askQuestion(chatId: number, step: number): Promise<void> {
@@ -17,15 +18,25 @@ async function askQuestion(chatId: number, step: number): Promise<void> {
   }
 }
 
-function buildSummary(answers: Record<string, string>): string {
-  const lines = questions.map((q) => `▫️ <b>${q.label}:</b> ${answers[q.id] ?? '—'}`);
-  return `📋 <b>اطلاعات گوشی</b>\n${'─'.repeat(20)}\n\n${lines.join('\n')}`;
+function buildSummary(session: Session): string {
+  const { answers, user } = session;
+  const lines = questions.map(
+    (q) => `▫️ <b>${q.label}:</b> ${escapeHtml(answers[q.id] ?? '—')}`
+  );
+
+  const nameLink = `<a href="tg://user?id=${user.id}">${escapeHtml(user.firstName)}</a>`;
+  const usernameLine = user.username ? `\n🔗 @${escapeHtml(user.username)}` : '';
+
+  return (
+    `📋 <b>اطلاعات گوشی</b>\n${'─'.repeat(20)}\n\n` +
+    lines.join('\n') +
+    `\n\n${'─'.repeat(20)}\n👤 فروشنده: ${nameLink}${usernameLine}`
+  );
 }
 
-async function finish(chatId: number, answers: Record<string, string>): Promise<void> {
-  const summary = buildSummary(answers);
-  await sendToGroup(summary);
-  await deleteSession(chatId);
+async function finish(chatId: number, session: Session): Promise<void> {
+  const summary = buildSummary(session);
+  await Promise.all([sendToGroup(summary), deleteSession(chatId)]);
   await sendMessage(
     chatId,
     '✅ اطلاعات با موفقیت ارسال شد!\n\nبرای شروع مجدد /start را ارسال کنید.'
@@ -38,30 +49,54 @@ async function advance(chatId: number, session: Session, answer: string): Promis
   session.step += 1;
 
   if (session.step >= questions.length) {
-    await finish(chatId, session.answers);
+    await finish(chatId, session);
   } else {
     await saveSession(chatId, session);
     await askQuestion(chatId, session.step);
   }
 }
 
+async function startSession(chatId: number, user: TelegramUser): Promise<void> {
+  const session: Session = { step: 0, answers: {}, user };
+  await saveSession(chatId, session);
+  await sendMessage(
+    chatId,
+    '👋 سلام!\nلطفاً اطلاعات گوشی را وارد کنید.\n\nبرای انصراف در هر مرحله /start را مجدداً ارسال کنید.'
+  );
+  await askQuestion(chatId, 0);
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const update = await req.json();
+  let update: Record<string, unknown>;
+  try {
+    update = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 400 });
+  }
 
-  // Handle plain text messages
+  try {
+    return await handleUpdate(update);
+  } catch (err) {
+    console.error('[webhook]', err);
+    return NextResponse.json({ ok: true });
+  }
+}
+
+async function handleUpdate(update: Record<string, unknown>): Promise<NextResponse> {
   if (update.message) {
-    const msg = update.message;
-    const chatId: number = msg.chat.id;
-    const text: string = msg.text ?? '';
+    const msg = update.message as Record<string, unknown>;
+    const chatId: number = (msg.chat as Record<string, unknown>).id as number;
+    const text: string = (msg.text as string) ?? '';
+    const from = msg.from as Record<string, unknown> | undefined;
 
-    if (text === '/start') {
-      const session: Session = { step: 0, answers: {} };
-      await saveSession(chatId, session);
-      await sendMessage(
-        chatId,
-        '👋 سلام!\nلطفاً اطلاعات گوشی را وارد کنید.\n\nبرای انصراف در هر مرحله /start را مجدداً ارسال کنید.'
-      );
-      await askQuestion(chatId, 0);
+    const user: TelegramUser = {
+      id: (from?.id as number) ?? chatId,
+      firstName: (from?.first_name as string) ?? 'کاربر',
+      username: from?.username as string | undefined,
+    };
+
+    if (text === '/start' || text === '/restart') {
+      await startSession(chatId, user);
       return NextResponse.json({ ok: true });
     }
 
@@ -72,10 +107,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ ok: true });
     }
 
+    if (session.step >= questions.length) {
+      await sendMessage(chatId, '⚠️ نشست قبلی منقضی شده. /start را ارسال کنید.');
+      return NextResponse.json({ ok: true });
+    }
+
     const currentQ = questions[session.step];
 
     if (currentQ.type !== 'user_input') {
-      // Waiting for a button — ignore free text
       await sendMessage(chatId, '👆 لطفاً یکی از گزینه‌های بالا را انتخاب کنید.');
       return NextResponse.json({ ok: true });
     }
@@ -89,18 +128,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  // Handle button presses (inline keyboard)
   if (update.callback_query) {
-    const cb = update.callback_query;
-    const chatId: number = cb.message.chat.id;
-    const data: string = cb.data ?? '';
+    const cb = update.callback_query as Record<string, unknown>;
+    const msg = cb.message as Record<string, unknown> | undefined;
+    if (!msg) return NextResponse.json({ ok: true });
+    const chatId: number = (msg.chat as Record<string, unknown>).id as number;
+    const data: string = (cb.data as string) ?? '';
 
-    await answerCallbackQuery(cb.id);
+    await answerCallbackQuery(cb.id as string);
 
     const session = await getSession(chatId);
 
     if (!session) {
       await sendMessage(chatId, '⚠️ نشست منقضی شده. /start را ارسال کنید.');
+      return NextResponse.json({ ok: true });
+    }
+
+    if (session.step >= questions.length) {
       return NextResponse.json({ ok: true });
     }
 
