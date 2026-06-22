@@ -23,7 +23,8 @@ export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export function buildInlineKeyboard(options: string[]): InlineKeyboardMarkup {
@@ -68,7 +69,8 @@ export async function sendToGroup(text: string): Promise<void> {
 export async function setMyCommands(): Promise<void> {
   await telegramRequest('setMyCommands', {
     commands: [
-      { command: 'start', description: 'شروع یا راه‌اندازی مجدد ربات' },
+      { command: 'start', description: 'شروع ربات' },
+      { command: 'restart', description: 'راه‌اندازی مجدد و پاک کردن اطلاعات قبلی' },
     ],
   });
 }

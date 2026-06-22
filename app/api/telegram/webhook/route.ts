@@ -23,10 +23,8 @@ function buildSummary(session: Session): string {
   const lines = questions.map(
     (q) => `▫️ <b>${q.label}:</b> ${escapeHtml(answers[q.id] ?? '—')}`
   );
-
   const nameLink = `<a href="tg://user?id=${user.id}">${escapeHtml(user.firstName)}</a>`;
   const usernameLine = user.username ? `\n🔗 @${escapeHtml(user.username)}` : '';
-
   return (
     `📋 <b>اطلاعات گوشی</b>\n${'─'.repeat(20)}\n\n` +
     lines.join('\n') +
@@ -36,11 +34,13 @@ function buildSummary(session: Session): string {
 
 async function finish(chatId: number, session: Session): Promise<void> {
   const summary = buildSummary(session);
-  await Promise.all([sendToGroup(summary), deleteSession(chatId)]);
-  await sendMessage(
-    chatId,
-    '✅ اطلاعات با موفقیت ارسال شد و بزودی به شما پاسخ خواهیم داد!\n\nبرای شروع مجدد /start را ارسال کنید.'
-  );
+  // Delete first — idempotency guard. If Telegram retries the webhook,
+  // getSession returns null and the handler exits cleanly. No duplicate sends.
+  await deleteSession(chatId);
+  await Promise.all([
+    sendToGroup(summary),
+    sendMessage(chatId, '✅ اطلاعات با موفقیت ارسال شد و بزودی به شما پاسخ خواهیم داد!\n\nبرای شروع مجدد /start را ارسال کنید.'),
+  ]);
 }
 
 async function advance(chatId: number, session: Session, answer: string): Promise<void> {
@@ -87,15 +87,14 @@ async function handleUpdate(update: Record<string, unknown>): Promise<NextRespon
     const msg = update.message as Record<string, unknown>;
     const chatId: number = (msg.chat as Record<string, unknown>).id as number;
     const text: string = (msg.text as string) ?? '';
-    const from = msg.from as Record<string, unknown> | undefined;
-
-    const user: TelegramUser = {
-      id: (from?.id as number) ?? chatId,
-      firstName: (from?.first_name as string) ?? 'کاربر',
-      username: from?.username as string | undefined,
-    };
 
     if (text === '/start' || text === '/restart') {
+      const from = msg.from as Record<string, unknown> | undefined;
+      const user: TelegramUser = {
+        id: (from?.id as number) ?? chatId,
+        firstName: (from?.first_name as string) || 'کاربر',
+        username: from?.username as string | undefined,
+      };
       await startSession(chatId, user);
       return NextResponse.json({ ok: true });
     }
@@ -104,6 +103,13 @@ async function handleUpdate(update: Record<string, unknown>): Promise<NextRespon
 
     if (!session) {
       await sendMessage(chatId, '⚠️ برای شروع /start را ارسال کنید.');
+      return NextResponse.json({ ok: true });
+    }
+
+    // Guard against stale sessions missing the user field (pre-migration data)
+    if (!session.user) {
+      await deleteSession(chatId);
+      await sendMessage(chatId, '⚠️ نشست قبلی منقضی شده. لطفاً /start را ارسال کنید.');
       return NextResponse.json({ ok: true });
     }
 
@@ -130,17 +136,26 @@ async function handleUpdate(update: Record<string, unknown>): Promise<NextRespon
 
   if (update.callback_query) {
     const cb = update.callback_query as Record<string, unknown>;
+    const cbId = cb.id as string | undefined;
     const msg = cb.message as Record<string, unknown> | undefined;
-    if (!msg) return NextResponse.json({ ok: true });
+    if (!msg || !cbId) return NextResponse.json({ ok: true });
+
     const chatId: number = (msg.chat as Record<string, unknown>).id as number;
     const data: string = (cb.data as string) ?? '';
 
-    await answerCallbackQuery(cb.id as string);
+    await answerCallbackQuery(cbId);
 
     const session = await getSession(chatId);
 
     if (!session) {
       await sendMessage(chatId, '⚠️ نشست منقضی شده. /start را ارسال کنید.');
+      return NextResponse.json({ ok: true });
+    }
+
+    // Guard against stale sessions missing the user field
+    if (!session.user) {
+      await deleteSession(chatId);
+      await sendMessage(chatId, '⚠️ نشست قبلی منقضی شده. لطفاً /start را ارسال کنید.');
       return NextResponse.json({ ok: true });
     }
 
