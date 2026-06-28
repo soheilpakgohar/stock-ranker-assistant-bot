@@ -16,12 +16,6 @@ export const questions: Question[] = [
     type: 'user_input',
   },
   {
-    id: 'storage',
-    label: 'حافظه',
-    prompt: '💾 حافظه را وارد کنید (مثال: ۱۲۸GB):',
-    type: 'user_input',
-  },
-  {
     id: 'color',
     label: 'رنگ',
     prompt: '🎨 رنگ را وارد کنید:',
@@ -32,6 +26,35 @@ export const questions: Question[] = [
     label: 'سلامت باتری',
     prompt: '🔋 سلامت باتری را وارد کنید (مثال: ۸۵٪):',
     type: 'user_input',
+  },
+  {
+    id: 'storage',
+    label: 'حافظه',
+    prompt: '💾 حافظه را وارد کنید:',
+    type: 'button',
+    options: ['128Gb', '256Gb', '512Gb', '1Tb']
+  },
+  {
+    id: 'part_number',
+    label: '‍‍پارت نامبر',
+    prompt: 'پارت نامبر را وارد کنید',
+    type: 'button',
+    options: ['LA', 'CH', 'JA', 'ZA']
+  },
+  {
+    id: 'repairment',
+    label: 'تعمیرات سخت افزاری',
+    prompt: 'دستگاه تعمیر شده است؟',
+    type: 'button',
+    options: ['بله', 'خیر']
+  },
+  {
+    id: 'lcd',
+    label: 'وضعیت LCD',
+    prompt: 'وضعیت صفحه نمایش را وارد کنید',
+    type: 'button',
+    options: ['سالم', 'خط و خش دارد', 'شکسته']
+
   },
   {
     id: 'icloud',
