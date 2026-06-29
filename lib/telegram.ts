@@ -1,4 +1,6 @@
-type InlineKeyboardButton = { text: string; callback_data: string };
+type InlineKeyboardButton =
+  | { text: string; callback_data: string }
+  | { text: string; web_app: { url: string } };
 type InlineKeyboardMarkup = { inline_keyboard: InlineKeyboardButton[][] };
 
 function base(): string {
