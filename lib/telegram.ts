@@ -1,6 +1,7 @@
 type InlineKeyboardButton =
   | { text: string; callback_data: string }
-  | { text: string; web_app: { url: string } };
+  | { text: string; web_app: { url: string } }
+  | { text: string; url: string };
 type InlineKeyboardMarkup = { inline_keyboard: InlineKeyboardButton[][] };
 
 function base(): string {
@@ -58,13 +59,14 @@ export async function answerCallbackQuery(callbackQueryId: string): Promise<void
   });
 }
 
-export async function sendToGroup(text: string): Promise<void> {
+export async function sendToGroup(text: string, replyMarkup?: InlineKeyboardMarkup): Promise<void> {
   const groupId = process.env.TELEGRAM_GROUP_ID;
   if (!groupId) throw new Error('TELEGRAM_GROUP_ID is not set');
   await telegramRequest('sendMessage', {
     chat_id: groupId,
     text,
     parse_mode: 'HTML',
+    ...(replyMarkup && { reply_markup: replyMarkup }),
   });
 }
 

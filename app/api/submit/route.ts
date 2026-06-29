@@ -62,7 +62,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const user = parseUser(body.initData);
     const summary = buildSummary(body.answers, user);
-    await sendToGroup(summary);
+    const dmButton = user?.username
+      ? { inline_keyboard: [[{ text: '💬 ارسال پیام به فروشنده', url: `https://t.me/${user.username}` }]] }
+      : undefined;
+    await sendToGroup(summary, dmButton);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[submit]', err);

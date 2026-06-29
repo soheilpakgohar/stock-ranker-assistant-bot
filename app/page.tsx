@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-type Tab = 'form' | 'calc' | 'contact';
+type Tab = 'form' | 'calc' | 'inventory' | 'contact';
 
 const round5 = (n: number) => Math.round(n / 10000) * 10000;
 const fmt = (n: number) =>
@@ -105,6 +105,12 @@ export default function Home() {
               <p style={{ marginTop: '8px', fontSize: '13px', color: 'var(--hint)' }}>
                 بزودی با شما تماس خواهیم گرفت.
               </p>
+              <button
+                onClick={() => { setDone(false); setAnswers({}); setFormError(''); }}
+                style={{ ...s.submitBtn, marginTop: '32px' }}
+              >
+                ثبت گوشی جدید
+              </button>
             </div>
           ) : (
             <>
@@ -242,6 +248,19 @@ export default function Home() {
           </>
         )}
 
+        {/* ── INVENTORY TAB ── */}
+        {tab === 'inventory' && (
+          <div style={{ textAlign: 'center', paddingTop: '80px' }}>
+            <div style={{ fontSize: '52px', lineHeight: 1 }}>🛍️</div>
+            <p style={{ marginTop: '20px', fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>
+              به زودی
+            </p>
+            <p style={{ marginTop: '10px', fontSize: '13px', color: 'var(--hint)', lineHeight: 1.6 }}>
+              نمایش موجودی فروشگاه<br />در حال آماده‌سازی است.
+            </p>
+          </div>
+        )}
+
         {/* ── CONTACT TAB ── */}
         {tab === 'contact' && (
           <>
@@ -290,6 +309,7 @@ export default function Home() {
           [
             ['form', '📱', 'ثبت گوشی'],
             ['calc', '💳', 'اقساط'],
+            ['inventory', '🛍️', 'موجودی'],
             ['contact', '📍', 'تماس'],
           ] as [Tab, string, string][]
         ).map(([id, icon, label]) => (
