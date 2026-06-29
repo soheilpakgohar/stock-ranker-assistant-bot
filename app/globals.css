@@ -8,6 +8,26 @@
   --border: rgba(0, 0, 0, 0.12);
 }
 
+/* Dark fallbacks when running outside Telegram (browser dark mode) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: var(--tg-theme-bg-color, #212121);
+    --text: var(--tg-theme-text-color, #ffffff);
+    --hint: var(--tg-theme-hint-color, #aaaaaa);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #2d2d2d);
+    --border: rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* Applied by JS when Telegram's own theme is dark (OS may still be light) */
+[data-theme='dark'] {
+  --bg: var(--tg-theme-bg-color, #212121);
+  --text: var(--tg-theme-text-color, #ffffff);
+  --hint: var(--tg-theme-hint-color, #aaaaaa);
+  --secondary-bg: var(--tg-theme-secondary-bg-color, #2d2d2d);
+  --border: rgba(255, 255, 255, 0.12);
+}
+
 *,
 *::before,
 *::after {

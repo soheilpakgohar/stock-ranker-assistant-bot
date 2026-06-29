@@ -4,7 +4,7 @@ import { questions } from '@/lib/questions';
 import { sendToGroup, escapeHtml } from '@/lib/telegram';
 
 function validateInitData(initData: string, token: string): boolean {
-  if (!initData) return process.env.NODE_ENV === 'development';
+  if (!initData) return true; // allow browser access; user info simply won't appear in the message
   try {
     const params = new URLSearchParams(initData);
     const hash = params.get('hash');

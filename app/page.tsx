@@ -11,6 +11,7 @@ declare global {
         ready(): void;
         initData: string;
         close(): void;
+        colorScheme: 'light' | 'dark';
       };
     };
   }
@@ -41,6 +42,9 @@ export default function Home() {
     if (tg) {
       tg.expand();
       tg.ready();
+      if (tg.colorScheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
     }
   }, []);
 
@@ -256,9 +260,9 @@ export default function Home() {
             />
             <div style={{ ...s.card, margin: '16px 0' }}>
               {/* TODO: fill actual shop info */}
-              <ResultRow label="آدرس" value="..." />
-              <ResultRow label="ساعت کاری" value="..." />
-              <ResultRow label="تلفن" value="..." />
+              <ResultRow label="آدرس" value="بندرعباس-مجتمع بندرعباس مال- طبقه اول واحد ۱۳۹" />
+              <ResultRow label="ساعت کاری" value="۱۰ صبح الی ۱۱ شب" />
+              <ResultRow label="تلفن" value="۰۹۱۷۹۷۷۵۷۹۸ - ۰۹۰۳۳۰۳۹۴۳۵" />
             </div>
             <a
               href="https://maps.google.com/?q=27.2029398,56.3418465"
