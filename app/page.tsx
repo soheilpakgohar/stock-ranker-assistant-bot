@@ -281,7 +281,8 @@ export default function Home() {
               {/* TODO: fill actual shop info */}
               <ResultRow label="آدرس" value="بندرعباس-مجتمع بندرعباس مال- طبقه اول واحد ۱۳۹" />
               <ResultRow label="ساعت کاری" value="۱۰ صبح الی ۱۱ شب" />
-              <ResultRow label="تلفن" value="۰۹۱۷۹۷۷۵۷۹۸ - ۰۹۰۳۳۰۳۹۴۳۵" copyable />
+              <ResultRow label="واحد فروش" value="۰۹۰۳۳۰۳۹۴۳۵" copyable />
+              <ResultRow label="مدیریت" value="۰۹۱۷۹۷۷۵۷۹۸" copyable />
             </div>
             <a
               href="https://maps.google.com/?q=27.2029398,56.3418465"
