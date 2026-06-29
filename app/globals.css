@@ -46,6 +46,13 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Prevent iOS Safari auto-zoom on input focus (triggered when font-size < 16px) */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}
+
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;

@@ -281,7 +281,7 @@ export default function Home() {
               {/* TODO: fill actual shop info */}
               <ResultRow label="آدرس" value="بندرعباس-مجتمع بندرعباس مال- طبقه اول واحد ۱۳۹" />
               <ResultRow label="ساعت کاری" value="۱۰ صبح الی ۱۱ شب" />
-              <ResultRow label="تلفن" value="۰۹۱۷۹۷۷۵۷۹۸ - ۰۹۰۳۳۰۳۹۴۳۵" />
+              <ResultRow label="تلفن" value="۰۹۱۷۹۷۷۵۷۹۸ - ۰۹۰۳۳۰۳۹۴۳۵" copyable />
             </div>
             <a
               href="https://maps.google.com/?q=27.2029398,56.3418465"
@@ -327,11 +327,22 @@ function ResultRow({
   label,
   value,
   highlight,
+  copyable,
 }: {
   label: string;
   value: string;
   highlight?: boolean;
+  copyable?: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  function copy() {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+
   return (
     <div
       style={{
@@ -343,15 +354,36 @@ function ResultRow({
       }}
     >
       <span style={{ fontSize: '13px', color: 'var(--hint)' }}>{label}</span>
-      <span
-        style={{
-          fontSize: highlight ? '15px' : '13px',
-          fontWeight: highlight ? 600 : 400,
-          color: highlight ? 'var(--btn)' : 'var(--text)',
-        }}
-      >
-        {value}
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span
+          style={{
+            fontSize: highlight ? '15px' : '13px',
+            fontWeight: highlight ? 600 : 400,
+            color: highlight ? 'var(--btn)' : 'var(--text)',
+          }}
+        >
+          {value}
+        </span>
+        {copyable && (
+          <button
+            onClick={copy}
+            style={{
+              background: copied ? 'var(--btn)' : 'var(--secondary-bg)',
+              color: copied ? 'var(--btn-text)' : 'var(--hint)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '3px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background 0.2s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {copied ? 'کپی شد ✓' : 'کپی'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
