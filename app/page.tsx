@@ -113,12 +113,12 @@ export default function Home() {
                 }}
                 style={{ ...s.submitBtn, marginTop: '32px' }}
               >
-                ثبت گوشی جدید
+                ثبت دستگاه جدید
               </button>
             </div>
           ) : (
             <>
-              <h1 style={s.title}>ثبت گوشی برای فروش</h1>
+              <h1 style={s.title}>ثبت دستگاه برای فروش</h1>
               {questions.map((q) => (
                 <div key={q.id} style={{ marginBottom: '20px' }}>
                   <label style={s.label}>{q.label}</label>
@@ -174,6 +174,7 @@ export default function Home() {
               <label style={s.label}>قیمت کل (تومان)</label>
               <input
                 type="number"
+                inputmode="decimal"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 style={s.input}
@@ -192,6 +193,7 @@ export default function Home() {
               </label>
               <input
                 type="number"
+                inputmode="decimal"
                 value={down}
                 onChange={(e) => setDown(e.target.value)}
                 style={{
@@ -312,7 +314,7 @@ export default function Home() {
       <nav style={s.tabBar}>
         {(
           [
-            ['form', '📱', 'ثبت گوشی'],
+            ['form', '📱', 'ثبت دستگاه'],
             ['calc', '💳', 'اقساط'],
             ['inventory', '🛍️', 'موجودی'],
             ['contact', '📍', 'تماس'],
