@@ -174,7 +174,7 @@ export default function Home() {
               <label style={s.label}>قیمت کل (تومان)</label>
               <input
                 type="number"
-                inputmode="decimal"
+                inputMode="decimal"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 style={s.input}
@@ -193,7 +193,7 @@ export default function Home() {
               </label>
               <input
                 type="number"
-                inputmode="decimal"
+                inputMode="decimal"
                 value={down}
                 onChange={(e) => setDown(e.target.value)}
                 style={{
