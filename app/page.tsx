@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, CSSProperties } from 'react';
+import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { questions } from '@/lib/questions';
 
 declare global {
@@ -25,6 +25,7 @@ const fmt = (n: number) =>
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('form');
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Form state
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -68,7 +69,7 @@ export default function Home() {
         throw new Error(data.error === 'unauthorized' ? 'لطفاً از طریق تلگرام وارد شوید' : 'خطا در ارسال اطلاعات');
       }
       setDone(true);
-      setTimeout(() => window?.Telegram?.WebApp?.close(), 2500);
+      closeTimerRef.current = setTimeout(() => window?.Telegram?.WebApp?.close(), 2500);
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'خطا در ارسال اطلاعات');
     } finally {
@@ -106,7 +107,10 @@ export default function Home() {
                 بزودی با شما تماس خواهیم گرفت.
               </p>
               <button
-                onClick={() => { setDone(false); setAnswers({}); setFormError(''); }}
+                onClick={() => {
+                  if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+                  setDone(false); setAnswers({}); setFormError('');
+                }}
                 style={{ ...s.submitBtn, marginTop: '32px' }}
               >
                 ثبت گوشی جدید

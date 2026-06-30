@@ -30,22 +30,25 @@ User taps /start in Telegram
   → user opens Mini App (app/page.tsx) inside Telegram
   → fills phone form → POST /api/submit { answers, initData }
   → submit route validates initData, calls sendToGroup()
-  → Mini App shows success and closes
+  → group receives summary + optional DM button
+  → Mini App shows success screen with option to submit again
 ```
 
 ### Files
 
 - **`lib/questions.ts`** — single source of truth for all 12 form fields (order, label, prompt, type, options). The Mini App form and the group summary both derive from this array.
-- **`lib/telegram.ts`** — thin fetch wrapper around the Telegram Bot API. `escapeHtml()` must be applied to all user-supplied strings in HTML-mode messages.
-- **`app/page.tsx`** — `'use client'` Mini App UI: three-tab layout (phone form, installment calculator, contact). Calls `window.Telegram.WebApp.expand()` / `ready()` on mount.
-- **`app/api/submit/route.ts`** — validates `initData` with HMAC-SHA256 (`WebAppData` key), parses `user` from `initData`, builds and sends the group summary. In `development` mode, empty `initData` bypasses validation so you can test via browser.
-- **`app/globals.css`** — maps Telegram theme CSS variables (`--tg-theme-*`) to short local vars (`--bg`, `--btn`, etc.) consumed throughout `page.tsx`.
+- **`lib/telegram.ts`** — thin fetch wrapper around the Telegram Bot API. `escapeHtml()` must be applied to all user-supplied strings in HTML-mode messages. `sendToGroup()` accepts an optional `InlineKeyboardMarkup` for the DM button.
+- **`app/page.tsx`** — `'use client'` Mini App UI: four-tab layout (phone form, installment calculator, inventory placeholder, contact). Calls `window.Telegram.WebApp.expand()` / `ready()` on mount and sets `data-theme="dark"` on `<html>` when `colorScheme === 'dark'`.
+- **`app/api/submit/route.ts`** — validates `initData` with HMAC-SHA256 (`WebAppData` key), parses `user` from `initData`, builds and sends the group summary. Empty `initData` is allowed (user info will be absent from the message); only non-empty but invalid `initData` is rejected with 401.
+- **`app/globals.css`** — maps Telegram theme CSS variables (`--tg-theme-*`) to short local vars (`--bg`, `--btn`, etc.). Includes `@media (prefers-color-scheme: dark)` fallbacks and a `[data-theme="dark"]` rule for when Telegram is dark but the OS is light.
 
 ### Key invariants
 
 - **`escapeHtml()` on all user text** before inserting into any `parse_mode: 'HTML'` message.
-- **`initData` validation is mandatory in production.** Do not disable it outside `NODE_ENV === 'development'`.
+- **`initData` validation:** empty `initData` passes (browser access with no user info); non-empty invalid `initData` returns 401. Do not remove the non-empty check.
 - **Questions are the single source of truth.** Add, remove, or reorder only in `lib/questions.ts`; the form and summary update automatically.
+- **iOS zoom fix:** all inputs are forced to `font-size: 16px` in `globals.css`. Do not set input font sizes below 16px — iOS Safari zooms the viewport on focus for smaller inputs.
+- **DM button:** `sendToGroup()` attaches a `💬 ارسال پیام به فروشنده` URL button only when the submitting user has a Telegram username. Users without a username still appear as a `tg://user?id=…` mention link in the message text.
 
 ## Deployment
 

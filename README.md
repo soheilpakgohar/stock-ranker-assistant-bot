@@ -1,16 +1,19 @@
-# Stock Ranker Telegram Bot
+# آرتین استور — تلگرام مینی‌اپ
 
-ربات تلگرام دستیار قیمت گذاری — جمع‌آوری اطلاعات گوشی و ارسال به گروه تلگرام.
+مینی‌اپ تلگرام برای فروشگاه آرتین استور، ساخته شده با Next.js و قابل استقرار روی Vercel.
 
-ساخته شده با Next.js و قابل استقرار در Vercel.
+**امکانات:**
+- ثبت اطلاعات گوشی برای فروش و ارسال خودکار به گروه تلگرام
+- محاسبه‌گر اقساط
+- موجودی فروشگاه (در حال آماده‌سازی)
+- اطلاعات تماس و موقعیت فروشگاه روی نقشه
 
 ---
 
 ## پیش‌نیازها
 
 1. **ربات تلگرام** — از [@BotFather](https://t.me/BotFather) یک ربات بسازید و توکن آن را بگیرید.
-2. **شناسه گروه تلگرام** — ربات را به گروه اضافه کنید، سپس شناسه گروه را از طریق [@userinfobot](https://t.me/userinfobot) یا API پیدا کنید (عدد منفی است، مانند `-100123456789`).
-3. **Upstash Redis** — یک دیتابیس رایگان در [console.upstash.com](https://console.upstash.com) بسازید.
+2. **شناسه گروه تلگرام** — ربات را به گروه اضافه کنید و شناسه گروه را پیدا کنید (عدد منفی، مانند `-100123456789`).
 
 ---
 
@@ -25,10 +28,9 @@ cp .env.local.example .env.local
 ```
 
 ```
-TELEGRAM_BOT_TOKEN=<توکن ربات>
-TELEGRAM_GROUP_ID=<شناسه گروه>
-UPSTASH_REDIS_REST_URL=<آدرس Redis>
-UPSTASH_REDIS_REST_TOKEN=<توکن Redis>
+TELEGRAM_BOT_TOKEN=<توکن ربات از BotFather>
+TELEGRAM_GROUP_ID=<شناسه گروه، مثال: -100123456789>
+NEXT_PUBLIC_WEBAPP_URL=<آدرس Vercel بعد از استقرار>
 ```
 
 ### ۲. پوش به GitHub و وصل کردن به Vercel
@@ -41,26 +43,35 @@ git remote add origin <آدرس ریپو>
 git push -u origin main
 ```
 
-سپس پروژه را در [vercel.com](https://vercel.com) وارد کرده و متغیرهای محیطی را اضافه کنید.
+سپس پروژه را در [vercel.com](https://vercel.com) وارد کرده، متغیرهای محیطی را اضافه کنید و deploy کنید.
 
 ### ۳. ثبت Webhook تلگرام
 
 پس از اولین استقرار موفق، یک بار این دستور را اجرا کنید:
 
 ```bash
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-vercel-domain>/api/telegram/webhook"
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<vercel-domain>/api/telegram/webhook"
+```
+
+### ۴. ثبت دستورات ربات
+
+```bash
+curl "https://api.telegram.org/bot<TOKEN>/setMyCommands" \
+  -H "Content-Type: application/json" \
+  -d '{"commands":[{"command":"start","description":"شروع ربات"},{"command":"restart","description":"راه‌اندازی مجدد"}]}'
 ```
 
 ---
 
-## جریان ربات
+## جریان کار
 
-1. کاربر `/start` می‌فرستد
-2. ربات ۱۱ سؤال را به ترتیب می‌پرسد:
-   - سؤالات متنی: کاربر تایپ می‌کند
-   - سؤالات دکمه‌ای: کاربر روی گزینه کلیک می‌کند
-3. پس از آخرین سؤال، خلاصه اطلاعات به گروه ارسال می‌شود
-4. کاربر تأییدیه دریافت می‌کند
+```
+کاربر /start می‌فرستد
+  → ربات دکمه «باز کردن آرتین استور» را می‌فرستد
+  → کاربر مینی‌اپ را در تلگرام باز می‌کند
+  → فرم را پر می‌کند و ارسال می‌کند
+  → اطلاعات به گروه ارسال می‌شود (با دکمه پیام مستقیم در صورت وجود username)
+```
 
 ---
 
@@ -71,4 +82,14 @@ npm install
 npm run dev
 ```
 
-> نکته: برای تست webhook در محیط محلی، باید یک URL عمومی داشته باشید (مانند یک preview deploy در Vercel).
+> تست کامل مینی‌اپ فقط داخل تلگرام امکان‌پذیر است. برای تست، یک preview deploy در Vercel بسازید و آدرس آن را در `NEXT_PUBLIC_WEBAPP_URL` قرار دهید.
+
+---
+
+## عیب‌یابی
+
+بررسی وضعیت webhook:
+
+```bash
+curl -s "https://api.telegram.org/bot<TOKEN>/getWebhookInfo" | python3 -m json.tool
+```

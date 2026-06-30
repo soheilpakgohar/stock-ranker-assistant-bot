@@ -30,16 +30,6 @@ export function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function buildInlineKeyboard(options: string[]): InlineKeyboardMarkup {
-  const rows: InlineKeyboardButton[][] = [];
-  for (let i = 0; i < options.length; i += 3) {
-    rows.push(
-      options.slice(i, i + 3).map((opt) => ({ text: opt, callback_data: opt }))
-    );
-  }
-  return { inline_keyboard: rows };
-}
-
 export async function sendMessage(
   chatId: number,
   text: string,
@@ -53,28 +43,8 @@ export async function sendMessage(
   });
 }
 
-export async function answerCallbackQuery(callbackQueryId: string): Promise<void> {
-  await telegramRequest('answerCallbackQuery', {
-    callback_query_id: callbackQueryId,
-  });
-}
-
 export async function sendToGroup(text: string, replyMarkup?: InlineKeyboardMarkup): Promise<void> {
   const groupId = process.env.TELEGRAM_GROUP_ID;
   if (!groupId) throw new Error('TELEGRAM_GROUP_ID is not set');
-  await telegramRequest('sendMessage', {
-    chat_id: groupId,
-    text,
-    parse_mode: 'HTML',
-    ...(replyMarkup && { reply_markup: replyMarkup }),
-  });
-}
-
-export async function setMyCommands(): Promise<void> {
-  await telegramRequest('setMyCommands', {
-    commands: [
-      { command: 'start', description: 'شروع ربات' },
-      { command: 'restart', description: 'راه‌اندازی مجدد و پاک کردن اطلاعات قبلی' },
-    ],
-  });
+  await sendMessage(Number(groupId), text, replyMarkup);
 }

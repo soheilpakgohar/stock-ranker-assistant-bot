@@ -59,6 +59,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }
 
+  const missingIds = questions.filter(q => !body.answers[q.id]?.trim()).map(q => q.id);
+  if (missingIds.length > 0) {
+    return NextResponse.json({ ok: false, error: 'incomplete', missing: missingIds }, { status: 400 });
+  }
+
   try {
     const user = parseUser(body.initData);
     const summary = buildSummary(body.answers, user);
