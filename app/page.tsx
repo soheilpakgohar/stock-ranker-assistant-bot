@@ -92,10 +92,9 @@ export default function Home() {
     : 0;
   const chequeActive = chequeMode && months % 2 === 0;
   const chequeCount = months / 2;
-  const monthsP1 = months + 1;
   const monthsM1 = months - 1;
   const chequeAmount = downValid
-    ? round5((totalRemainder * monthsM1 * 0.05 + totalRemainder) / monthsP1) * 2
+    ? round5((totalRemainder * monthsM1 * 0.05 + totalRemainder) / months) * 2
     : 0;
   const totalPaid = chequeActive
     ? downNum + chequeAmount * chequeCount
