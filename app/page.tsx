@@ -37,6 +37,7 @@ export default function Home() {
   const [price, setPrice] = useState('');
   const [down, setDown] = useState('');
   const [months, setMonths] = useState(6);
+  const [chequeMode, setChequeMode] = useState(false);
 
   useEffect(() => {
     const tg = window?.Telegram?.WebApp;
@@ -89,7 +90,14 @@ export default function Home() {
   const monthlyPayment = downValid
     ? round5((totalRemainder * months * 0.05 + totalRemainder) / months)
     : 0;
-  const totalPaid = downNum + monthlyPayment * months;
+  const chequeActive = chequeMode && months % 2 === 0;
+  const chequeCount = months / 2;
+  const chequeAmount = downValid
+    ? round5(((totalRemainder * (months - 1) * 0.05 + totalRemainder) / (months + 1)) * 2)
+    : 0;
+  const totalPaid = chequeActive
+    ? downNum + chequeAmount * chequeCount
+    : downNum + monthlyPayment * months;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
@@ -215,28 +223,87 @@ export default function Home() {
             <div style={{ marginBottom: '20px' }}>
               <label style={s.label}>تعداد اقساط</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {Array.from({ length: 18 }, (_, i) => i + 1).map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setMonths(n)}
-                    style={{ ...s.chip(months === n), minWidth: '40px' }}
-                  >
-                    {n}
-                  </button>
-                ))}
+                {Array.from({ length: 18 }, (_, i) => i + 1).map((n) => {
+                  const isDisabled = chequeMode && n % 2 !== 0;
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => setMonths(n)}
+                      disabled={isDisabled}
+                      style={{
+                        ...s.chip(months === n),
+                        minWidth: '40px',
+                        opacity: isDisabled ? 0.35 : 1,
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {n}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '20px',
+                opacity: months % 2 !== 0 ? 0.4 : 1,
+                cursor: months % 2 !== 0 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <span style={{ fontSize: '13px', color: 'var(--text)' }}>
+                پرداخت با چک (دو ماه یک‌بار)
+              </span>
+              <span
+                onClick={() => {
+                  if (months % 2 === 0) setChequeMode((v) => !v);
+                }}
+                style={{
+                  width: '42px',
+                  height: '24px',
+                  borderRadius: '12px',
+                  background: chequeActive ? 'var(--btn)' : 'var(--secondary-bg)',
+                  border: '1px solid var(--border)',
+                  position: 'relative',
+                  transition: 'background 0.15s',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '2px',
+                    right: chequeActive ? '2px' : '20px',
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: chequeActive ? 'var(--btn-text)' : 'var(--hint)',
+                    transition: 'right 0.15s',
+                  }}
+                />
+              </span>
+            </label>
 
             {downValid && (
               <div style={s.card}>
                 <ResultRow label="قیمت کل" value={`${fmt(priceNum)} تومان`} />
                 <ResultRow label="پیش‌پرداخت" value={`${fmt(downNum)} تومان`} />
                 <ResultRow label="کارمزد تامین مالی" value={`${fmt(financingFee)} تومان`} />
-                <ResultRow
-                  label={`مبلغ اقساط (${months} قسط)`}
-                  value={`${fmt(monthlyPayment)} تومان`}
-                  highlight
-                />
+                {chequeActive ? (
+                  <>
+                    <ResultRow label="تعداد چک" value={`${chequeCount} چک`} />
+                    <ResultRow label="مبلغ هر چک" value={`${fmt(chequeAmount)} تومان`} highlight />
+                  </>
+                ) : (
+                  <ResultRow
+                    label={`مبلغ اقساط (${months} قسط)`}
+                    value={`${fmt(monthlyPayment)} تومان`}
+                    highlight
+                  />
+                )}
                 <ResultRow label="مجموع پرداخت" value={`${fmt(round5(totalPaid))} تومان`} />
               </div>
             )}
