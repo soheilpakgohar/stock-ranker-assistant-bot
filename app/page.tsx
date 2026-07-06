@@ -495,7 +495,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <h1 style={s.title}>🍏 ساخت حساب اپل (Apple ID)</h1>
+              <h1 style={s.title}>🍎 ساخت حساب اپل (Apple ID)</h1>
 
               {/* Need support button — sends the user's info to the handler */}
               {supportError && (
@@ -664,7 +664,7 @@ export default function Home() {
             ['calc', '💳', 'اقساط'],
             ['inventory', '🛍️', 'موجودی'],
             ['contact', '📍', 'تماس'],
-            ['apple', '🍏', 'اپل'],
+            ['apple', '🍎', 'اپل'],
           ] as [Tab, string, string][]
         ).map(([id, icon, label]) => (
           <button key={id} onClick={() => setTab(id)} style={s.tabBtn(tab === id)}>
