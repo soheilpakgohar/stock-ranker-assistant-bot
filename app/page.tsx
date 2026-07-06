@@ -618,7 +618,7 @@ export default function Home() {
                       >
                         <option value="">سال</option>
                         {Array.from({ length: 106 }, (_, i) => 1405 - i).map((y) => (
-                          <option key={y} value={String(y)}>{y.toLocaleString('fa-IR')}</option>
+                          <option key={y} value={String(y)}>{y.toLocaleString('fa-IR', { useGrouping: false })}</option>
                         ))}
                       </select>
                     </div>
