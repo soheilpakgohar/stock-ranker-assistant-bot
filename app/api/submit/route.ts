@@ -1,37 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 import { questions } from '@/lib/questions';
 import { sendToGroup, escapeHtml } from '@/lib/telegram';
-
-function validateInitData(initData: string, token: string): boolean {
-  if (!initData) return true; // allow browser access; user info simply won't appear in the message
-  try {
-    const params = new URLSearchParams(initData);
-    const hash = params.get('hash');
-    if (!hash) return false;
-    params.delete('hash');
-    const checkStr = [...params.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n');
-    const secret = createHmac('sha256', 'WebAppData').update(token).digest();
-    return createHmac('sha256', secret).update(checkStr).digest('hex') === hash;
-  } catch {
-    return false;
-  }
-}
-
-function parseUser(initData: string): { id: number; firstName: string; username?: string } | null {
-  try {
-    const params = new URLSearchParams(initData);
-    const userStr = params.get('user');
-    if (!userStr) return null;
-    const u = JSON.parse(userStr);
-    return { id: u.id, firstName: u.first_name ?? 'کاربر', username: u.username };
-  } catch {
-    return null;
-  }
-}
+import { validateInitData, parseUser } from '@/lib/initData';
 
 function buildSummary(answers: Record<string, string>, user: { id: number; firstName: string; username?: string } | null): string {
   const lines = questions.map(q => `▫️ <b>${q.label}:</b> ${escapeHtml(answers[q.id] ?? '—')}`);
