@@ -514,7 +514,7 @@ export default function Home() {
               {/* Step 1: listen to the terms audio */}
               <div style={{ ...s.card, padding: '16px 14px', marginBottom: '16px' }}>
                 <p style={{ fontSize: '13px', color: 'var(--hint)', marginBottom: '12px' }}>
-                  ۱) ابتدا به شرایط و ضوابط ساخت حساب اپل به‌طور کامل گوش دهید:
+                  ۱) ابتدا به شرایط و ضوابط ساخت حساب اپل را به‌ طور کامل گوش دهید:
                 </p>
                 <audio
                   src="/apple-account-terms.m4a"
