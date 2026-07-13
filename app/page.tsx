@@ -197,7 +197,7 @@ export default function Home() {
         {tab === 'form' && (
           done ? (
             <div style={{ textAlign: 'center', paddingTop: '60px' }}>
-              <div style={{ fontSize: '56px', lineHeight: 1 }}>✅</div>
+              <i className="fa-solid fa-circle-check" style={{ fontSize: '56px', lineHeight: 1, color: '#22c55e' }} />
               <p style={{ marginTop: '20px', fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>
                 اطلاعات با موفقیت ارسال شد!
               </p>
@@ -414,7 +414,7 @@ export default function Home() {
         {/* ── INVENTORY TAB ── */}
         {tab === 'inventory' && (
           <div style={{ textAlign: 'center', paddingTop: '80px' }}>
-            <div style={{ fontSize: '52px', lineHeight: 1 }}>🛍️</div>
+            <i className="fa-solid fa-bag-shopping" style={{ fontSize: '52px', lineHeight: 1, color: 'var(--hint)' }} />
             <p style={{ marginTop: '20px', fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>
               به زودی
             </p>
@@ -451,17 +451,19 @@ export default function Home() {
               href="https://maps.google.com/?q=27.2029398,56.3418465"
               target="_blank"
               rel="noreferrer"
-              style={s.outlineBtn}
+              style={{ ...s.outlineBtn, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
             >
-              🗺 باز کردن در گوگل‌مپ
+              <i className="fa-solid fa-map-location-dot" />
+              <span>باز کردن در گوگل‌مپ</span>
             </a>
             <a
               href="https://artinstoree.com"
               target="_blank"
               rel="noreferrer"
-              style={{ ...s.outlineBtn, marginTop: '10px' }}
+              style={{ ...s.outlineBtn, marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
             >
-              🌐 وبسایت فروشگاه
+              <i className="fa-solid fa-globe" />
+              <span>وبسایت فروشگاه</span>
             </a>
           </>
         )}
@@ -470,7 +472,7 @@ export default function Home() {
         {tab === 'apple' && (
           appleDone ? (
             <div style={{ textAlign: 'center', paddingTop: '60px' }}>
-              <div style={{ fontSize: '56px', lineHeight: 1 }}>🍏</div>
+              <i className="fa-brands fa-apple" style={{ fontSize: '56px', lineHeight: 1, color: 'var(--text)' }} />
               <p style={{ marginTop: '20px', fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>
                 درخواست شما با موفقیت ارسال شد!
               </p>
@@ -495,7 +497,10 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <h1 style={s.title}>🍎 ساخت حساب اپل (Apple ID)</h1>
+              <h1 style={s.title}>
+                <i className="fa-brands fa-apple" style={{ marginLeft: '6px' }} />
+                ساخت حساب اپل (Apple ID)
+              </h1>
 
               {/* Need support button — sends the user's info to the handler */}
               {supportError && (
@@ -506,9 +511,16 @@ export default function Home() {
               <button
                 onClick={handleSupport}
                 disabled={supportSubmitting}
-                style={{ ...s.outlineBtn, marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                style={{ ...s.outlineBtn, marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               >
-                {supportSubmitting ? 'در حال ارسال...' : '🎧 نیاز به پشتیبانی دارم'}
+                {supportSubmitting ? (
+                  'در حال ارسال...'
+                ) : (
+                  <>
+                    <i className="fa-solid fa-headset" />
+                    <span>نیاز به پشتیبانی دارم</span>
+                  </>
+                )}
               </button>
 
               {/* Step 1: listen to the terms audio */}
@@ -524,7 +536,14 @@ export default function Home() {
                   style={{ width: '100%', direction: 'ltr' }}
                 />
                 <p style={{ fontSize: '12px', color: audioPlayed ? 'var(--btn)' : 'var(--hint)', marginTop: '10px', textAlign: 'center' }}>
-                  {audioPlayed ? '✓ پخش کامل شد' : 'پس از پایان پخش، دکمه‌ی پذیرش فعال می‌شود'}
+                  {audioPlayed ? (
+                    <>
+                      <i className="fa-solid fa-check" style={{ marginLeft: '4px' }} />
+                      پخش کامل شد
+                    </>
+                  ) : (
+                    'پس از پایان پخش، دکمه‌ی پذیرش فعال می‌شود'
+                  )}
                 </p>
               </div>
 
@@ -660,15 +679,15 @@ export default function Home() {
       <nav style={s.tabBar}>
         {(
           [
-            ['form', '📱', 'ثبت دستگاه'],
-            ['calc', '💳', 'اقساط'],
-            ['inventory', '🛍️', 'موجودی'],
-            ['contact', '📍', 'تماس'],
-            ['apple', '🍎', 'اپل'],
+            ['form', 'fa-solid fa-mobile-screen', 'ثبت دستگاه'],
+            ['calc', 'fa-solid fa-credit-card', 'اقساط'],
+            ['inventory', 'fa-solid fa-bag-shopping', 'موجودی'],
+            ['contact', 'fa-solid fa-location-dot', 'تماس'],
+            ['apple', 'fa-brands fa-apple', 'اپل'],
           ] as [Tab, string, string][]
         ).map(([id, icon, label]) => (
           <button key={id} onClick={() => setTab(id)} style={s.tabBtn(tab === id)}>
-            <span style={{ fontSize: '22px', lineHeight: 1 }}>{icon}</span>
+            <i className={icon} style={{ fontSize: '20px', lineHeight: 1, textAlign: 'center' }} />
             <span style={{ fontSize: '11px' }}>{label}</span>
           </button>
         ))}
@@ -734,7 +753,13 @@ function ResultRow({
               whiteSpace: 'nowrap',
             }}
           >
-            {copied ? 'کپی شد ✓' : 'کپی'}
+            {copied ? (
+              <>
+                کپی شد <i className="fa-solid fa-check" style={{ marginRight: '2px' }} />
+              </>
+            ) : (
+              'کپی'
+            )}
           </button>
         )}
       </div>
