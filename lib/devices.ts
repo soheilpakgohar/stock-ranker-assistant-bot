@@ -69,7 +69,19 @@ export async function fetchDevice(id: string): Promise<unknown> {
     const text = await res.text().catch(() => '');
     throw new Error(`devices API detail failed ${res.status}: ${text}`);
   }
-  return res.json();
+  const data = await res.json();
+
+  // The API returns relative photo paths (e.g. "/storage/devices/1/x.jpg")
+  // that can't be resolved by the client. Prefix them with the API base URL
+  // server-side so the client always receives absolute URLs.
+  const obj = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  if (obj && Array.isArray(obj.photos)) {
+    const base = baseUrl();
+    obj.photos = obj.photos
+      .filter((p): p is string => typeof p === 'string' && p.length > 0)
+      .map((p) => (p.startsWith('http') ? p : `${base}${p.startsWith('/') ? '' : '/'}${p}`));
+  }
+  return data;
 }
 
 // ── Client-side normalizers ──────────────────────────────────────────────
@@ -99,6 +111,11 @@ function coerceId(v: unknown): string | number | undefined {
   return undefined;
 }
 
+/** Pick a human-friendly device name from any of the common field names. */
+function pickName(o: Record<string, unknown>): string | undefined {
+  return asString(o.name) ?? asString(o.title) ?? asString(o.model_name) ?? asString(o.model);
+}
+
 /** Normalize the list payload into DeviceListItem[]. */
 export function normalizeList(raw: unknown): DeviceListItem[] {
   const arr = Array.isArray(raw)
@@ -111,7 +128,7 @@ export function normalizeList(raw: unknown): DeviceListItem[] {
       if (!item || typeof item !== 'object') return undefined;
       const o = item as Record<string, unknown>;
       const id = coerceId(o.id) ?? coerceId(o._id);
-      const name = asString(o.name) ?? asString(o.title);
+      const name = pickName(o);
       if (id == null || !name) return undefined;
       return {
         id,
@@ -119,7 +136,7 @@ export function normalizeList(raw: unknown): DeviceListItem[] {
         price: asPrice(o.price) ?? asPrice(o.cost),
         image: pickImage(o),
         brand: asString(o.brand),
-        model: asString(o.model),
+        model: asString(o.model) ?? asString(o.model_name),
         in_stock: typeof o.in_stock === 'boolean' ? o.in_stock : undefined,
       } as DeviceListItem;
     })
@@ -131,10 +148,11 @@ export function normalizeDetail(raw: unknown): DeviceDetails | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = (raw as { data?: Record<string, unknown> })?.data ?? (raw as Record<string, unknown>);
   const id = coerceId(o.id) ?? coerceId(o._id);
-  const name = asString(o.name) ?? asString(o.title);
+  const name = pickName(o);
   if (id == null || !name) return null;
 
-  // Flatten specs whether they arrive as a record or an array of {label,value}/{key,value}.
+  // Flatten specs whether they arrive as a record, an array of {label,value},
+  // or as flat top-level device fields (the actual API shape).
   let specs: DeviceSpec[] | undefined;
   const rawSpecs = o.specs ?? o.specifications ?? o.attributes;
   if (Array.isArray(rawSpecs)) {
@@ -158,8 +176,38 @@ export function normalizeDetail(raw: unknown): DeviceDetails | null {
     if (rows.length) specs = rows;
   }
 
-  const images = Array.isArray(o.images)
-    ? (o.images.map(asString).filter((x): x is string => !!x))
+  // Collect flat top-level device fields the API actually returns, with
+  // Persian labels, so they show up as spec rows in the detail sheet.
+  const FIELD_LABELS: Record<string, string> = {
+    color: 'رنگ',
+    battery_health: 'سلامت باتری',
+    scratches: 'خط و خش',
+    problems: 'مشکلات',
+    icloud_lock: 'قفل آیکلاود',
+    package_type: 'پک',
+    storage: 'حافظه',
+    condition: 'وضعیت',
+    warranty: 'گارانتی',
+    brand: 'برند',
+  };
+  if (!specs) {
+    const rows: DeviceSpec[] = [];
+    for (const [key, label] of Object.entries(FIELD_LABELS)) {
+      if (key in o) {
+        const v = o[key];
+        const value =
+          typeof v === 'boolean' ? (v ? 'بله' : 'خیر') :
+            typeof v === 'number' ? `${v.toLocaleString('fa-IR')}٪` :
+              asString(v);
+        if (value) rows.push({ label, value });
+      }
+    }
+    if (rows.length) specs = rows;
+  }
+
+  const rawPhotos = Array.isArray(o.photos) ? o.photos : Array.isArray(o.images) ? o.images : undefined;
+  const images = rawPhotos
+    ? (rawPhotos.map(asString).filter((x): x is string => !!x))
     : undefined;
 
   return {
@@ -168,9 +216,9 @@ export function normalizeDetail(raw: unknown): DeviceDetails | null {
     price: asPrice(o.price) ?? asPrice(o.cost),
     image: pickImage(o),
     brand: asString(o.brand),
-    model: asString(o.model),
+    model: asString(o.model) ?? asString(o.model_name),
     in_stock: typeof o.in_stock === 'boolean' ? o.in_stock : undefined,
-    description: asString(o.description),
+    description: asString(o.description) ?? asString(o.explanation),
     specs,
     storage: asString(o.storage) ?? asString(o.memory),
     color: asString(o.color),

@@ -98,8 +98,11 @@ export default function Home() {
   }, []);
 
   // Fetch the device list when the inventory tab is first opened.
+  // invLoading is intentionally excluded from deps — setting it inside the
+  // effect would trigger a cleanup that cancels the in-flight request.
+  // The `cancelled` flag + `invFetched` handle re-entry safely.
   useEffect(() => {
-    if (tab !== 'inventory' || invFetched || invLoading) return;
+    if (tab !== 'inventory' || invFetched) return;
     let cancelled = false;
     (async () => {
       setInvLoading(true);
@@ -116,7 +119,7 @@ export default function Home() {
       }
     })();
     return () => { cancelled = true; };
-  }, [tab, invFetched, invLoading]);
+  }, [tab, invFetched]);
 
   // Open the detail sheet — cache-first, fetch on miss.
   const openDevice = useCallback((id: string | number) => {
@@ -935,7 +938,17 @@ function DeviceSheet({
     if (info.offset.y > 120 || info.velocity.y > 500) onClose();
   }, [onClose]);
 
-  const img = device?.image;
+  // Photos: prefer the detail's images array, fall back to the single image field.
+  const photos = device?.images?.length ? device.images : device?.image ? [device.image] : [];
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
+  const openViewer = useCallback((idx: number) => {
+    setViewerIndex(idx);
+    setViewerOpen(true);
+  }, []);
+
   const priceText =
     device ? (
       typeof device.price === 'number' ? `${fmt(device.price)} تومان` :
@@ -943,11 +956,6 @@ function DeviceSheet({
     ) : '';
   const specRows: { label: string; value: string }[] = [];
   if (device?.specs?.length) specRows.push(...device.specs);
-  if (device?.storage) specRows.push({ label: 'حافظه', value: device.storage });
-  if (device?.color) specRows.push({ label: 'رنگ', value: device.color });
-  if (device?.condition) specRows.push({ label: 'وضعیت', value: device.condition });
-  if (device?.warranty) specRows.push({ label: 'گارانتی', value: device.warranty });
-  if (device?.brand) specRows.push({ label: 'برند', value: device.brand });
 
   return (
     <AnimatePresence>
@@ -1024,8 +1032,14 @@ function DeviceSheet({
               {/* ── Detail content ── */}
               {!loading && !error && !orderDone && device && (
                 <>
-                  {img ? (
-                    <img src={img} alt={device.name} style={{ width: '100%', maxHeight: '220px', objectFit: 'contain', borderRadius: '14px', background: 'var(--secondary-bg)', marginBottom: '16px' }} />
+                  {photos.length > 0 ? (
+                    <PhotoGallery
+                      photos={photos}
+                      name={device.name}
+                      index={galleryIndex}
+                      onIndexChange={setGalleryIndex}
+                      onOpenViewer={openViewer}
+                    />
                   ) : (
                     <div style={{ width: '100%', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '14px', background: 'var(--secondary-bg)', marginBottom: '16px' }}>
                       <i className="fa-solid fa-mobile-screen-button" style={{ fontSize: '56px', color: 'var(--hint)' }} />
@@ -1070,7 +1084,217 @@ function DeviceSheet({
               )}
             </div>
           </motion.div>
+
+          {/* Fullscreen photo viewer — overlays on top of the sheet */}
+          <PhotoViewer
+            photos={photos}
+            index={viewerIndex}
+            open={viewerOpen}
+            onClose={() => setViewerOpen(false)}
+            onIndexChange={setViewerIndex}
+          />
         </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/**
+ * Horizontal swipeable photo gallery for the device detail sheet.
+ * Snaps between photos with spring physics; tapping a photo opens the
+ * fullscreen viewer. Shows dot indicators + a count badge.
+ */
+function PhotoGallery({
+  photos,
+  name,
+  index,
+  onIndexChange,
+  onOpenViewer,
+}: {
+  photos: string[];
+  name: string;
+  index: number;
+  onIndexChange: (i: number) => void;
+  onOpenViewer: (i: number) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Snap to the nearest photo when a drag ends, using velocity to break ties.
+  const onDragEnd = useCallback((_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+    const width = containerRef.current?.offsetWidth ?? 1;
+    const threshold = width / 2;
+    // RTL: dragging right (positive x) goes to the *next* photo (higher index),
+    // because the gallery visually starts from the right.
+    const goNext = info.offset.x > threshold || info.velocity.x > 300;
+    const goPrev = info.offset.x < -threshold || info.velocity.x < -300;
+    if (goNext && index < photos.length - 1) onIndexChange(index + 1);
+    else if (goPrev && index > 0) onIndexChange(index - 1);
+    else onIndexChange(index); // snap back
+  }, [index, photos.length, onIndexChange]);
+
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <div
+        ref={containerRef}
+        style={{ position: 'relative', overflow: 'hidden', borderRadius: '14px', background: 'var(--secondary-bg)' }}
+      >
+        <motion.div
+          drag={reduceMotion ? false : 'x'}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.2}
+          onDragEnd={onDragEnd}
+          animate={{ x: `calc(${-index * 100}% + ${index * 0}px)` }}
+          transition={reduceMotion ? { duration: 0.2 } : { type: 'spring', bounce: 0.2, duration: 0.4 }}
+          style={{ display: 'flex', width: `${photos.length * 100}%`, cursor: 'pointer' }}
+        >
+          {photos.map((src, i) => (
+            <div
+              key={i}
+              onClick={() => onOpenViewer(i)}
+              style={{ width: `${100 / photos.length}%`, flexShrink: 0, height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <img src={src} alt={`${name} - ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} loading="lazy" />
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Tap-to-expand hint + count badge */}
+        {photos.length > 1 && (
+          <div style={{ position: 'absolute', top: '8px', left: '8px', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: '11px', padding: '3px 8px', borderRadius: '10px', backdropFilter: 'blur(8px)' }}>
+            {index + 1} / {photos.length}
+          </div>
+        )}
+        <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: '11px', padding: '3px 8px', borderRadius: '10px', backdropFilter: 'blur(8px)' }}>
+          <i className="fa-solid fa-expand" />
+        </div>
+      </div>
+
+      {/* Dot indicators */}
+      {photos.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '8px' }}>
+          {photos.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => onIndexChange(i)}
+              style={{
+                width: i === index ? '18px' : '6px',
+                height: '6px',
+                borderRadius: '3px',
+                background: i === index ? 'var(--btn)' : 'var(--border)',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Fullscreen photo viewer with swipe navigation and tap-to-close.
+ * Black scrim, pinch-free, swipe left/right to move between photos.
+ */
+function PhotoViewer({
+  photos,
+  index,
+  open,
+  onClose,
+  onIndexChange,
+}: {
+  photos: string[];
+  index: number;
+  open: boolean;
+  onClose: () => void;
+  onIndexChange: (i: number) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const onDragEnd = useCallback((_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+    const width = containerRef.current?.offsetWidth ?? 1;
+    const threshold = width / 4;
+    const goNext = info.offset.x > threshold || info.velocity.x > 300;
+    const goPrev = info.offset.x < -threshold || info.velocity.x < -300;
+    if (goNext && index < photos.length - 1) onIndexChange(index + 1);
+    else if (goPrev && index > 0) onIndexChange(index - 1);
+  }, [index, photos.length, onIndexChange]);
+
+  return (
+    <AnimatePresence>
+      {open && photos.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.95)' }}
+        >
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute', top: '12px', right: '12px', zIndex: 2,
+              width: '36px', height: '36px', borderRadius: '50%',
+              background: 'rgba(255,255,255,0.15)', color: '#fff',
+              border: 'none', cursor: 'pointer', fontSize: '16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <i className="fa-solid fa-xmark" />
+          </button>
+
+          {/* Count badge */}
+          {photos.length > 1 && (
+            <div style={{ position: 'absolute', top: '18px', left: '12px', zIndex: 2, color: '#fff', fontSize: '13px', fontWeight: 500 }}>
+              {index + 1} / {photos.length}
+            </div>
+          )}
+
+          {/* Swipeable image track */}
+          <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            <motion.div
+              drag={reduceMotion ? false : 'x'}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.2}
+              onDragEnd={onDragEnd}
+              animate={{ x: `calc(${-index * 100}%)` }}
+              transition={reduceMotion ? { duration: 0.2 } : { type: 'spring', bounce: 0.2, duration: 0.4 }}
+              style={{ display: 'flex', width: `${photos.length * 100}%`, height: '100%' }}
+            >
+              {photos.map((src, i) => (
+                <div
+                  key={i}
+                  onClick={onClose}
+                  style={{ width: `${100 / photos.length}%`, flexShrink: 0, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+                >
+                  <img src={src} alt={`عکس ${i + 1}`} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+              ))}
+            </motion.div>
+          </div>
+
+          {/* Nav arrows (for non-touch / reduced motion) */}
+          {photos.length > 1 && (
+            <>
+              {index > 0 && (
+                <button onClick={() => onIndexChange(index - 1)} style={{ position: 'absolute', top: '50%', right: '12px', transform: 'translateY(-50%)', zIndex: 2, width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="fa-solid fa-chevron-right" />
+                </button>
+              )}
+              {index < photos.length - 1 && (
+                <button onClick={() => onIndexChange(index + 1)} style={{ position: 'absolute', top: '50%', left: '12px', transform: 'translateY(-50%)', zIndex: 2, width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="fa-solid fa-chevron-left" />
+                </button>
+              )}
+            </>
+          )}
+        </motion.div>
       )}
     </AnimatePresence>
   );
