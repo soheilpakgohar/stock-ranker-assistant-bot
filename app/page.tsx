@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, CSSProperties } from 'react';
+import { useState, useEffect, useRef, useCallback, CSSProperties } from 'react';
 import { questions } from '@/lib/questions';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { normalizeList, normalizeDetail, type DeviceListItem, type DeviceDetails } from '@/lib/devices';
 
 declare global {
   interface Window {
@@ -64,6 +66,26 @@ export default function Home() {
   const [supportSubmitting, setSupportSubmitting] = useState(false);
   const [supportError, setSupportError] = useState('');
 
+  // Inventory list
+  const [devices, setDevices] = useState<DeviceListItem[]>([]);
+  const [invLoading, setInvLoading] = useState(false);
+  const [invError, setInvError] = useState('');
+  const [invFetched, setInvFetched] = useState(false);
+
+  // Sheet + detail
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const [detail, setDetail] = useState<DeviceDetails | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  // Client-side detail cache — key = String(device.id). Survives across opens
+  // for the component's lifetime; each device is fetched only once.
+  const [detailCache, setDetailCache] = useState<Record<string, DeviceDetails>>({});
+
+  // Order (lives inside the sheet)
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderDone, setOrderDone] = useState(false);
+  const [orderError, setOrderError] = useState('');
+
   useEffect(() => {
     const tg = window?.Telegram?.WebApp;
     if (tg) {
@@ -74,6 +96,89 @@ export default function Home() {
       }
     }
   }, []);
+
+  // Fetch the device list when the inventory tab is first opened.
+  useEffect(() => {
+    if (tab !== 'inventory' || invFetched || invLoading) return;
+    let cancelled = false;
+    (async () => {
+      setInvLoading(true);
+      setInvError('');
+      try {
+        const r = await fetch('/api/devices');
+        if (!r.ok) throw new Error();
+        const raw = await r.json();
+        if (!cancelled) setDevices(normalizeList(raw));
+      } catch {
+        if (!cancelled) setInvError('خطا در دریافت لیست دستگاه‌ها');
+      } finally {
+        if (!cancelled) { setInvLoading(false); setInvFetched(true); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tab, invFetched, invLoading]);
+
+  // Open the detail sheet — cache-first, fetch on miss.
+  const openDevice = useCallback((id: string | number) => {
+    const key = String(id);
+    setSelectedId(id);
+    setOrderDone(false);
+    setOrderError('');
+
+    // Cache hit → show instantly, no loading state, no network request.
+    const cached = detailCache[key];
+    if (cached) {
+      setDetail(cached);
+      setDetailError('');
+      setDetailLoading(false);
+      return;
+    }
+    // Cache miss → fetch, then store in the cache for next time.
+    setDetail(null);
+    setDetailError('');
+    setDetailLoading(true);
+    fetch(`/api/devices/${encodeURIComponent(id)}`)
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((raw) => {
+        const d = normalizeDetail(raw);
+        setDetail(d);
+        if (d) setDetailCache((prev) => ({ ...prev, [key]: d }));
+      })
+      .catch(() => setDetailError('خطا در دریافت اطلاعات دستگاه'))
+      .finally(() => setDetailLoading(false));
+  }, [detailCache]);
+
+  const closeSheet = useCallback(() => {
+    setSelectedId(null);
+    setOrderDone(false);
+    setOrderError('');
+  }, []);
+
+  // Place an order — sends brief device info + user identity to the group.
+  async function handleOrder() {
+    const dev = detail ?? devices.find((d) => d.id === selectedId);
+    if (!dev) return;
+    const initData = window?.Telegram?.WebApp?.initData ?? '';
+    setOrderSubmitting(true);
+    setOrderError('');
+    try {
+      const res = await fetch('/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device: { id: dev.id, name: dev.name, price: dev.price }, initData }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error === 'unauthorized' ? 'لطفاً از طریق تلگرام وارد شوید' : 'خطا در ثبت سفارش');
+      }
+      setOrderDone(true);
+      closeTimerRef.current = setTimeout(() => closeSheet(), 2500);
+    } catch (e) {
+      setOrderError(e instanceof Error ? e.message : 'خطا در ثبت سفارش');
+    } finally {
+      setOrderSubmitting(false);
+    }
+  }
 
   async function handleSubmit() {
     const missing = questions.find((q) => !answers[q.id]?.trim());
@@ -413,15 +518,92 @@ export default function Home() {
 
         {/* ── INVENTORY TAB ── */}
         {tab === 'inventory' && (
-          <div style={{ textAlign: 'center', paddingTop: '80px' }}>
-            <i className="fa-solid fa-bag-shopping" style={{ fontSize: '52px', lineHeight: 1, color: 'var(--hint)' }} />
-            <p style={{ marginTop: '20px', fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>
-              به زودی
-            </p>
-            <p style={{ marginTop: '10px', fontSize: '13px', color: 'var(--hint)', lineHeight: 1.6 }}>
-              نمایش موجودی فروشگاه<br />در حال آماده‌سازی است.
-            </p>
-          </div>
+          <>
+            <h1 style={s.title}>موجودی فروشگاه</h1>
+
+            {invLoading && (
+              <div style={s.deviceList}>
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} style={s.deviceCard}>
+                    <motion.div
+                      animate={{ opacity: [0.4, 0.8, 0.4] }}
+                      transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.12 }}
+                      style={{ ...s.thumb, background: 'var(--border)' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <motion.div
+                        animate={{ opacity: [0.4, 0.8, 0.4] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.12 }}
+                        style={s.skeletonRow}
+                      />
+                      <motion.div
+                        animate={{ opacity: [0.4, 0.8, 0.4] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.12 + 0.15 }}
+                        style={{ ...s.skeletonRow, width: '50%', marginTop: '8px' }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!invLoading && invError && (
+              <div style={{ textAlign: 'center', paddingTop: '40px' }}>
+                <i className="fa-solid fa-triangle-exclamation" style={{ fontSize: '44px', lineHeight: 1, color: 'var(--hint)' }} />
+                <p style={{ marginTop: '16px', fontSize: '14px', color: 'var(--text)' }}>{invError}</p>
+                <button
+                  onClick={() => { setInvFetched(false); setInvError(''); }}
+                  style={{ ...s.outlineBtn, marginTop: '16px', display: 'inline-block', width: 'auto', padding: '10px 24px' }}
+                >
+                  تلاش مجدد
+                </button>
+              </div>
+            )}
+
+            {!invLoading && !invError && devices.length === 0 && (
+              <div style={{ textAlign: 'center', paddingTop: '80px' }}>
+                <i className="fa-solid fa-box-open" style={{ fontSize: '52px', lineHeight: 1, color: 'var(--hint)' }} />
+                <p style={{ marginTop: '20px', fontSize: '15px', color: 'var(--text)' }}>موجودی خالی است</p>
+              </div>
+            )}
+
+            {!invLoading && !invError && devices.length > 0 && (
+              <div style={s.deviceList}>
+                {devices.map((d) => {
+                  const img = d.image;
+                  const priceText =
+                    typeof d.price === 'number' ? `${fmt(d.price)} تومان` :
+                    typeof d.price === 'string' && d.price ? d.price : '';
+                  return (
+                    <motion.button
+                      key={String(d.id)}
+                      onClick={() => openDevice(d.id)}
+                      whileTap={{ scale: 0.97 }}
+                      transition={{ type: 'spring', bounce: 0, duration: 0.2 }}
+                      style={s.deviceCard}
+                    >
+                      {img ? (
+                        <img src={img} alt={d.name} style={s.thumb} loading="lazy" />
+                      ) : (
+                        <div style={s.thumbFallback}>
+                          <i className="fa-solid fa-mobile-screen-button" style={{ fontSize: '22px', color: 'var(--hint)' }} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={s.deviceName}>{d.name}</div>
+                        {priceText ? (
+                          <div style={s.devicePrice}>{priceText}</div>
+                        ) : (
+                          <div style={{ ...s.devicePrice, color: 'var(--hint)', fontSize: '12px' }}>استعلام قیمت</div>
+                        )}
+                      </div>
+                      <i className="fa-solid fa-chevron-left" style={{ fontSize: '14px', color: 'var(--hint)', flexShrink: 0 }} />
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
         {/* ── CONTACT TAB ── */}
@@ -675,6 +857,20 @@ export default function Home() {
         )}
       </main>
 
+      {/* ── DEVICE DETAIL SHEET ── */}
+      <DeviceSheet
+        open={selectedId !== null}
+        device={detail}
+        loading={detailLoading}
+        error={detailError}
+        orderSubmitting={orderSubmitting}
+        orderDone={orderDone}
+        orderError={orderError}
+        onClose={closeSheet}
+        onRetry={() => selectedId != null && openDevice(selectedId)}
+        onOrder={handleOrder}
+      />
+
       {/* ── TAB BAR ── */}
       <nav style={s.tabBar}>
         {(
@@ -694,6 +890,203 @@ export default function Home() {
       </nav>
     </div>
   );
+}
+
+function DeviceSheet({
+  open,
+  device,
+  loading,
+  error,
+  orderSubmitting,
+  orderDone,
+  orderError,
+  onClose,
+  onRetry,
+  onOrder,
+}: {
+  open: boolean;
+  device: DeviceDetails | null;
+  loading: boolean;
+  error: string;
+  orderSubmitting: boolean;
+  orderDone: boolean;
+  orderError: string;
+  onClose: () => void;
+  onRetry: () => void;
+  onOrder: () => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const reduceTransparency = usePrefersReducedTransparency();
+
+  // Lock body scroll while the sheet is open.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  // Spring ≈ Apple damping 0.8 / response 0.3 for a momentum-driven sheet.
+  const spring = reduceMotion
+    ? { duration: 0.2 }
+    : { type: 'spring' as const, bounce: 0.2, duration: 0.4 };
+
+  const onDragEnd = useCallback((_: unknown, info: { offset: { y: number }; velocity: { y: number } }) => {
+    if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+  }, [onClose]);
+
+  const img = device?.image;
+  const priceText =
+    device ? (
+      typeof device.price === 'number' ? `${fmt(device.price)} تومان` :
+      typeof device.price === 'string' && device.price ? device.price : ''
+    ) : '';
+  const specRows: { label: string; value: string }[] = [];
+  if (device?.specs?.length) specRows.push(...device.specs);
+  if (device?.storage) specRows.push({ label: 'حافظه', value: device.storage });
+  if (device?.color) specRows.push({ label: 'رنگ', value: device.color });
+  if (device?.condition) specRows.push({ label: 'وضعیت', value: device.condition });
+  if (device?.warranty) specRows.push({ label: 'گارانتی', value: device.warranty });
+  if (device?.brand) specRows.push({ label: 'برند', value: device.brand });
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
+          {/* Scrim — dims the list behind the sheet */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }}
+          />
+
+          {/* Sheet — docks at bottom, slides up/down with a spring */}
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={spring}
+            drag={reduceMotion ? false : 'y'}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={onDragEnd}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              borderTopLeftRadius: '20px',
+              borderTopRightRadius: '20px',
+              background: reduceTransparency ? 'var(--secondary-bg)' : 'rgba(45, 45, 45, 0.82)',
+              backdropFilter: reduceTransparency ? undefined : 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: reduceTransparency ? undefined : 'blur(20px) saturate(180%)',
+              borderTop: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 -8px 32px rgba(0,0,0,0.3)',
+              color: 'var(--text)',
+            }}
+          >
+            {/* Drag handle */}
+            <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: 'var(--hint)', margin: '8px auto 4px', flexShrink: 0 }} />
+
+            <div style={{ padding: '8px 16px 24px' }}>
+              {/* ── Loading skeleton ── */}
+              {loading && (
+                <>
+                  <motion.div animate={{ opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 1.2, repeat: Infinity }} style={{ width: '100%', height: '160px', borderRadius: '14px', background: 'var(--border)', marginBottom: '16px' }} />
+                  <motion.div animate={{ opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.1 }} style={{ height: '20px', width: '70%', borderRadius: '6px', background: 'var(--border)', marginBottom: '12px' }} />
+                  <motion.div animate={{ opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }} style={{ height: '14px', width: '45%', borderRadius: '6px', background: 'var(--border)' }} />
+                </>
+              )}
+
+              {/* ── Error state ── */}
+              {!loading && error && (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <i className="fa-solid fa-triangle-exclamation" style={{ fontSize: '36px', color: 'var(--hint)' }} />
+                  <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--text)' }}>{error}</p>
+                  <button onClick={onRetry} style={{ ...s.outlineBtn, marginTop: '12px', display: 'inline-block', width: 'auto', padding: '8px 20px' }}>تلاش مجدد</button>
+                </div>
+              )}
+
+              {/* ── Order success ── */}
+              {!loading && !error && orderDone && (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <i className="fa-solid fa-circle-check" style={{ fontSize: '48px', color: '#22c55e' }} />
+                  <p style={{ marginTop: '16px', fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>سفارش شما ثبت شد</p>
+                  <p style={{ marginTop: '6px', fontSize: '13px', color: 'var(--hint)' }}>به‌زودی با شما تماس می‌گیریم.</p>
+                </div>
+              )}
+
+              {/* ── Detail content ── */}
+              {!loading && !error && !orderDone && device && (
+                <>
+                  {img ? (
+                    <img src={img} alt={device.name} style={{ width: '100%', maxHeight: '220px', objectFit: 'contain', borderRadius: '14px', background: 'var(--secondary-bg)', marginBottom: '16px' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '14px', background: 'var(--secondary-bg)', marginBottom: '16px' }}>
+                      <i className="fa-solid fa-mobile-screen-button" style={{ fontSize: '56px', color: 'var(--hint)' }} />
+                    </div>
+                  )}
+
+                  <h2 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text)', marginBottom: '6px' }}>{device.name}</h2>
+                  {priceText && (
+                    <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--btn)', marginBottom: '16px' }}>{priceText}</p>
+                  )}
+
+                  {device.description && (
+                    <p style={{ fontSize: '13px', lineHeight: 1.7, color: 'var(--hint)', marginBottom: '16px' }}>{device.description}</p>
+                  )}
+
+                  {specRows.length > 0 && (
+                    <div style={s.card}>
+                      {specRows.map((row, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < specRows.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                          <span style={{ fontSize: '13px', color: 'var(--hint)' }}>{row.label}</span>
+                          <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 500 }}>{row.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {orderError && (
+                    <p style={{ color: '#e53e3e', fontSize: '13px', margin: '12px 0 0' }}>{orderError}</p>
+                  )}
+
+                  <motion.button
+                    onClick={onOrder}
+                    disabled={orderSubmitting}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ type: 'spring', bounce: 0, duration: 0.2 }}
+                    style={{ ...s.submitBtn, marginTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  >
+                    <i className="fa-solid fa-cart-shopping" />
+                    <span>{orderSubmitting ? 'در حال ثبت...' : 'ثبت سفارش'}</span>
+                  </motion.button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Detect prefers-reduced-transparency for the sheet material fallback.
+function usePrefersReducedTransparency(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-transparency: reduce)');
+    const update = () => setReduced(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return reduced;
 }
 
 function ResultRow({
@@ -842,6 +1235,69 @@ const s = {
     borderRadius: '10px',
     fontSize: '14px',
     textDecoration: 'none',
+  } as CSSProperties,
+
+  deviceList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  } as CSSProperties,
+
+  deviceCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    width: '100%',
+    background: 'var(--secondary-bg)',
+    border: '1px solid var(--border)',
+    borderRadius: '14px',
+    padding: '12px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    textAlign: 'right',
+  } as CSSProperties,
+
+  thumb: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '12px',
+    objectFit: 'cover',
+    flexShrink: 0,
+  } as CSSProperties,
+
+  thumbFallback: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '12px',
+    background: 'var(--bg)',
+    border: '1px solid var(--border)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  } as CSSProperties,
+
+  deviceName: {
+    fontSize: '15px',
+    fontWeight: 600,
+    color: 'var(--text)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+
+  devicePrice: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'var(--btn)',
+    marginTop: '2px',
+  } as CSSProperties,
+
+  skeletonRow: {
+    height: '14px',
+    width: '80%',
+    borderRadius: '6px',
+    background: 'var(--border)',
   } as CSSProperties,
 
   tabBar: {
