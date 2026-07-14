@@ -17,6 +17,8 @@ export type DeviceListItem = {
   photo?: string;
   brand?: string;
   model?: string;
+  color?: string;
+  batteryHealth?: number;
   in_stock?: boolean;
   [key: string]: unknown;
 };
@@ -46,6 +48,28 @@ function token(): string {
   return t;
 }
 
+/**
+ * The API returns relative photo paths (e.g. "/storage/devices/1/x.jpg")
+ * that can't be resolved by the client. Prefix them with the API base URL
+ * server-side so the client always receives absolute URLs.
+ * Mutates the object in place — called on both list items and detail objects.
+ */
+function resolvePhotoUrls(obj: Record<string, unknown>, base: string): void {
+  for (const field of ['photos', 'images'] as const) {
+    if (Array.isArray(obj[field])) {
+      obj[field] = (obj[field] as unknown[])
+        .filter((p): p is string => typeof p === 'string' && p.length > 0)
+        .map((p) => (p.startsWith('http') ? p : `${base}${p.startsWith('/') ? '' : '/'}${p}`));
+    }
+  }
+  for (const field of ['image', 'image_url', 'thumbnail', 'photo'] as const) {
+    const v = obj[field];
+    if (typeof v === 'string' && v && !v.startsWith('http')) {
+      obj[field] = `${base}${v.startsWith('/') ? '' : '/'}${v}`;
+    }
+  }
+}
+
 /** Fetch the device list (array, shape unknown upstream). Throws on HTTP error. */
 export async function fetchDevices(): Promise<unknown> {
   const res = await fetch(`${baseUrl()}/api/devices`, {
@@ -56,7 +80,21 @@ export async function fetchDevices(): Promise<unknown> {
     const text = await res.text().catch(() => '');
     throw new Error(`devices API list failed ${res.status}: ${text}`);
   }
-  return res.json();
+  const data = await res.json();
+  const base = baseUrl();
+
+  // Resolve relative photo paths on every list item so thumbnails work too.
+  const arr = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { data?: unknown })?.data)
+      ? (data as { data: unknown[] }).data
+      : null;
+  if (arr) {
+    for (const item of arr) {
+      if (item && typeof item === 'object') resolvePhotoUrls(item as Record<string, unknown>, base);
+    }
+  }
+  return data;
 }
 
 /** Fetch a single device's details by id. Throws on HTTP error. */
@@ -71,15 +109,8 @@ export async function fetchDevice(id: string): Promise<unknown> {
   }
   const data = await res.json();
 
-  // The API returns relative photo paths (e.g. "/storage/devices/1/x.jpg")
-  // that can't be resolved by the client. Prefix them with the API base URL
-  // server-side so the client always receives absolute URLs.
-  const obj = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
-  if (obj && Array.isArray(obj.photos)) {
-    const base = baseUrl();
-    obj.photos = obj.photos
-      .filter((p): p is string => typeof p === 'string' && p.length > 0)
-      .map((p) => (p.startsWith('http') ? p : `${base}${p.startsWith('/') ? '' : '/'}${p}`));
+  if (data && typeof data === 'object') {
+    resolvePhotoUrls(data as Record<string, unknown>, baseUrl());
   }
   return data;
 }
@@ -137,6 +168,8 @@ export function normalizeList(raw: unknown): DeviceListItem[] {
         image: pickImage(o),
         brand: asString(o.brand),
         model: asString(o.model) ?? asString(o.model_name),
+        color: asString(o.color),
+        batteryHealth: typeof o.battery_health === 'number' ? o.battery_health : undefined,
         in_stock: typeof o.in_stock === 'boolean' ? o.in_stock : undefined,
       } as DeviceListItem;
     })
