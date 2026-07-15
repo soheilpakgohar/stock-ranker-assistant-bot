@@ -56,15 +56,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const dmButton = user?.username
       ? { inline_keyboard: [[{ text: '💬 ارسال پیام به فروشنده', url: `https://t.me/${user.username}` }]] }
       : undefined;
-
-    // Send the text summary first, then photos as a reply to it.
     const groupId = Number(process.env.TELEGRAM_GROUP_ID);
-    const messageId = await sendToGroup(summary, dmButton);
 
-    if (photos.length === 1) {
-      await sendPhoto(groupId, photos[0], summary, messageId);
-    } else if (photos.length >= 2) {
-      await sendMediaGroup(groupId, photos, summary, messageId);
+    if (photos.length === 0) {
+      // No photos → text-only message (with DM button).
+      await sendToGroup(summary, dmButton);
+    } else if (photos.length === 1) {
+      // 1 photo → sendPhoto with the summary as caption (single message).
+      await sendPhoto(groupId, photos[0], summary);
+    } else {
+      // 2–3 photos → sendMediaGroup album, summary as caption on first photo.
+      await sendMediaGroup(groupId, photos, summary);
     }
 
     return NextResponse.json({ ok: true });

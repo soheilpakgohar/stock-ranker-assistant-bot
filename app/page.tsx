@@ -39,6 +39,34 @@ const formatPrice = (price: number | string | undefined): string =>
   typeof price === 'number' ? `${fmt(price)} تومان` :
   typeof price === 'string' && price ? price : '';
 
+/**
+ * Compress and resize an image File on the client via canvas before upload.
+ * Resizes the longest edge to maxDim (1280px), re-encodes as JPEG at quality
+ * 0.7 — typically turns a 5–15MB camera photo into ~200–400KB.
+ */
+async function compressImage(file: File, maxDim = 1280, quality = 0.7): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return file; // fallback: send original if canvas unavailable
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+
+  const blob = await canvas.toDataURL('image/jpeg', quality);
+  // toDataURL returns "data:image/jpeg;base64,..." — convert back to a File.
+  const base64 = blob.split(',')[1];
+  const bytes = atob(base64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new File([arr], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
+}
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>('form');
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -394,17 +422,22 @@ export default function Home() {
                       accept="image/*"
                       multiple
                       style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        const valid = files.filter((f) => {
-                          if (f.size > 10 * 1024 * 1024) {
-                            setPhotoError('حجم عکس نباید بیشتر از ۱۰ مگابایت باشد');
-                            return false;
-                          }
-                          return true;
-                        });
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files ?? []).filter(
+                          (f) => f.type.startsWith('image/'),
+                        );
                         setPhotoError('');
-                        setPhotos((prev) => [...prev, ...valid].slice(0, 3));
+                        // Compress each image (resize + JPEG re-encode) before storing.
+                        const room = 3 - photos.length;
+                        const toProcess = files.slice(0, room);
+                        try {
+                          const compressed = await Promise.all(
+                            toProcess.map((f) => compressImage(f)),
+                          );
+                          setPhotos((prev) => [...prev, ...compressed]);
+                        } catch {
+                          setPhotoError('خطا در پردازش عکس');
+                        }
                         e.target.value = '';
                       }}
                     />
