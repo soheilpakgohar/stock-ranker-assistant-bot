@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { questions } from '@/lib/questions';
-import { sendToGroup, escapeHtml } from '@/lib/telegram';
+import { sendToGroup, sendPhoto, sendMediaGroup, escapeHtml } from '@/lib/telegram';
 import { validateInitData, parseUser } from '@/lib/initData';
 
 function buildSummary(answers: Record<string, string>, user: { id: number; firstName: string; username?: string } | null): string {
@@ -17,30 +17,56 @@ function buildSummary(answers: Record<string, string>, user: { id: number; first
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  let body: { answers: Record<string, string>; initData: string };
+  // Accept multipart/form-data (text fields + optional photo files).
+  let form: FormData;
   try {
-    body = await req.json();
+    form = await req.formData();
   } catch {
     return NextResponse.json({ ok: false, error: 'invalid body' }, { status: 400 });
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN ?? '';
-  if (!validateInitData(body.initData, token)) {
+  const initData = (form.get('initData') as string) ?? '';
+  if (!validateInitData(initData, token)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }
 
-  const missingIds = questions.filter(q => !body.answers[q.id]?.trim()).map(q => q.id);
+  // Parse answers from the JSON string field.
+  let answers: Record<string, string>;
+  try {
+    answers = JSON.parse((form.get('answers') as string) ?? '{}');
+  } catch {
+    return NextResponse.json({ ok: false, error: 'invalid answers' }, { status: 400 });
+  }
+
+  const missingIds = questions.filter(q => !answers[q.id]?.trim()).map(q => q.id);
   if (missingIds.length > 0) {
     return NextResponse.json({ ok: false, error: 'incomplete', missing: missingIds }, { status: 400 });
   }
 
+  // Collect optional photos (photo0, photo1, photo2) — in-memory only, never persisted.
+  const photos = [0, 1, 2]
+    .map((i) => form.get(`photo${i}`))
+    .filter((f): f is File => f instanceof File && f.size > 0)
+    .map((f) => ({ data: f, filename: f.name || 'photo.jpg' }));
+
   try {
-    const user = parseUser(body.initData);
-    const summary = buildSummary(body.answers, user);
+    const user = parseUser(initData);
+    const summary = buildSummary(answers, user);
     const dmButton = user?.username
       ? { inline_keyboard: [[{ text: '💬 ارسال پیام به فروشنده', url: `https://t.me/${user.username}` }]] }
       : undefined;
-    await sendToGroup(summary, dmButton);
+
+    // Send the text summary first, then photos as a reply to it.
+    const groupId = Number(process.env.TELEGRAM_GROUP_ID);
+    const messageId = await sendToGroup(summary, dmButton);
+
+    if (photos.length === 1) {
+      await sendPhoto(groupId, photos[0], summary, messageId);
+    } else if (photos.length >= 2) {
+      await sendMediaGroup(groupId, photos, summary, messageId);
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[submit]', err);

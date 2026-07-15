@@ -23,7 +23,7 @@ No automated tests. End-to-end testing requires a deployed Vercel URL — the Mi
 
 HTTP surfaces:
 - **`POST /api/telegram/webhook`** — handles `/start` + `/restart` only; sends a `web_app` button back
-- **`POST /api/submit`** — validates `initData`, builds summary from `lib/questions.ts`, sends to Telegram group
+- **`POST /api/submit`** — validates `initData`, builds summary from `lib/questions.ts`, sends to Telegram group. Accepts `multipart/form-data` with optional photos (`photo0`, `photo1`, `photo2`); text summary is sent first, then photos as a reply. Photos flow through memory only — never written to disk or persisted.
 - **`POST /api/apple-account`** — Apple ID purchase form; sends to `APPLE_ACCOUNT_HANDLER_ID` (not the group)
 - **`POST /api/apple-support`** — sends user identity as a support request to `APPLE_ACCOUNT_HANDLER_ID`
 - **`GET /api/devices`** — transparent proxy to the external devices API (list). No `initData` auth (public catalog). Attaches the bearer token server-side via `lib/devices.ts`.
@@ -35,7 +35,7 @@ HTTP surfaces:
 | File | Role |
 |------|------|
 | `lib/questions.ts` | Single source of truth for the 15 phone-form fields. Both the UI and the group summary derive from this array — add/remove/reorder only here. |
-| `lib/telegram.ts` | Thin Telegram Bot API wrapper. `escapeHtml()` must wrap every user string before HTML insertion. |
+| `lib/telegram.ts` | Thin Telegram Bot API wrapper. `escapeHtml()` must wrap every user string before HTML insertion. `sendMessage`/`sendToGroup` return `message_id`. `sendPhoto`/`sendMediaGroup` send photos via multipart/form-data (in-memory only, no persistence). |
 | `lib/initData.ts` | `validateInitData` + `parseUser`. Empty `initData` → allowed; non-empty invalid → 401. |
 | `lib/devices.ts` | Server-side fetch helpers (`fetchDevices`, `fetchDevice`) for the external devices API — attach the bearer token, prefix relative photo URLs with `DEVICES_API_BASE_URL`. Also exports client-side normalizers (`normalizeList`, `normalizeDetail`) that defensively coerce the unknown upstream JSON into typed `DeviceListItem` / `DeviceDetails`. The upstream field names are unknown, so normalizers check many aliases (`model_name` → `name`, `photos` → `images`, `explanation` → `description`, etc.) and fold flat fields into labeled `specs` rows. |
 | `app/page.tsx` | `'use client'` UI — five tabs: `form`, `calc`, `inventory`, `apple`, `contact`. All styles in a bottom `s: CSSProperties` object. Inventory tab fetches `/api/devices` on first open, renders a device list with skeleton/error/empty states, and opens a `DeviceSheet` bottom sheet (spring drag-to-dismiss) with a `PhotoGallery` (swipeable) + `PhotoViewer` (fullscreen). Uses the `motion` library for springs/drag/`AnimatePresence`. |
@@ -50,6 +50,8 @@ HTTP surfaces:
 - **iOS zoom fix:** `font-size: 16px` is forced on all inputs in `globals.css`. Never set input font sizes below 16px.
 - **DM button**: attached only when `user.username` exists. Users without a username get a `tg://user?id=…` mention link instead.
 - **Installment calculator** (in `page.tsx`): min down-payment = 40%, financing fee = 5% of remainder, amounts rounded to nearest 10,000 (`round5`), cheque mode only for even month counts.
+- **Form photos are in-memory only.** The phone form accepts 0–3 optional photos via `<input type="file">`. They travel as `File` objects → `FormData` → server → Telegram Bot API, then are discarded. Nothing is written to disk or a database. The submit route uses `req.formData()` (not `req.json()`); 1 photo → `sendPhoto`, 2–3 → `sendMediaGroup` (min 2 required by Telegram), both as a reply to the text summary message. Client-side guard rejects files >10MB.
+- **`sendMessage`/`sendToGroup` return `message_id`** — needed so the submit route can reply photos to the text summary. `telegramRequest` returns the parsed `result` (was `void`).
 - **Devices API bearer token is server-side only.** `DEVICES_API_TOKEN` never reaches the client — the Mini App calls our own `/api/devices` proxy routes, which attach the `Authorization` header in `lib/devices.ts`. Never expose the token in client code or `NEXT_PUBLIC_*` vars.
 - **`DEVICES_API_BASE_URL` has no hardcoded default.** `localhost:8000` is dev-only (set in `.env.local`); production must point at a publicly reachable host (Vercel can't reach localhost).
 - **Device detail cache** (in `page.tsx`): `detailCache` is an in-memory `Record<string, DeviceDetails>` keyed by `String(device.id)`. Each device is fetched only once; re-opening shows details instantly. Clears on page reload (no localStorage persistence).

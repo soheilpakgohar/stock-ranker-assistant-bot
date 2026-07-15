@@ -45,6 +45,8 @@ export default function Home() {
 
   // Form state
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [formError, setFormError] = useState('');
@@ -198,11 +200,11 @@ export default function Home() {
     setFormError('');
     try {
       const initData = window?.Telegram?.WebApp?.initData ?? '';
-      const res = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers, initData }),
-      });
+      const fd = new FormData();
+      fd.append('answers', JSON.stringify(answers));
+      fd.append('initData', initData);
+      photos.forEach((p, i) => fd.append(`photo${i}`, p));
+      const res = await fetch('/api/submit', { method: 'POST', body: fd });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error === 'unauthorized' ? 'لطفاً از طریق تلگرام وارد شوید' : 'خطا در ارسال اطلاعات');
@@ -320,7 +322,7 @@ export default function Home() {
               <button
                 onClick={() => {
                   if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-                  setDone(false); setAnswers({}); setFormError('');
+                  setDone(false); setAnswers({}); setPhotos([]); setFormError(''); setPhotoError('');
                 }}
                 style={{ ...s.submitBtn, marginTop: '32px' }}
               >
@@ -360,6 +362,61 @@ export default function Home() {
                   )}
                 </div>
               ))}
+
+              {/* Photo upload (optional, 0–3 photos, in-memory only) */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ ...s.label, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>عکس‌های دستگاه (اختیاری)</span>
+                  <span style={{ color: 'var(--hint)', fontSize: '11px' }}>
+                    حداکثر ۳ عکس
+                  </span>
+                </label>
+                {photos.length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    {photos.map((p, i) => (
+                      <div key={i} style={s.photoThumb}>
+                        <img src={URL.createObjectURL(p)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} />
+                        <button
+                          type="button"
+                          onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                          style={s.photoRemove}
+                        >
+                          <i className="fa-solid fa-xmark" style={{ fontSize: '10px' }} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {photos.length < 3 && (
+                  <label style={s.photoUpload}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        const valid = files.filter((f) => {
+                          if (f.size > 10 * 1024 * 1024) {
+                            setPhotoError('حجم عکس نباید بیشتر از ۱۰ مگابایت باشد');
+                            return false;
+                          }
+                          return true;
+                        });
+                        setPhotoError('');
+                        setPhotos((prev) => [...prev, ...valid].slice(0, 3));
+                        e.target.value = '';
+                      }}
+                    />
+                    <i className="fa-solid fa-camera" style={{ fontSize: '20px', color: 'var(--hint)' }} />
+                    <span style={{ fontSize: '13px', color: 'var(--hint)' }}>افزودن عکس</span>
+                  </label>
+                )}
+                {photoError && (
+                  <p style={{ color: '#e53e3e', fontSize: '12px', marginTop: '6px' }}>{photoError}</p>
+                )}
+              </div>
+
               {formError && (
                 <p style={{ color: '#e53e3e', fontSize: '13px', margin: '4px 0 12px' }}>
                   {formError}
@@ -1457,6 +1514,44 @@ const s = {
     fontSize: '15px',
     fontWeight: 600,
     cursor: 'pointer',
+    fontFamily: 'inherit',
+  } as CSSProperties,
+
+  photoUpload: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '20px',
+    border: '2px dashed var(--border)',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  } as CSSProperties,
+
+  photoThumb: {
+    position: 'relative',
+    width: '72px',
+    height: '72px',
+    flexShrink: 0,
+  } as CSSProperties,
+
+  photoRemove: {
+    position: 'absolute',
+    top: '-6px',
+    insetInlineEnd: '-6px',
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    background: '#e53e3e',
+    color: '#fff',
+    border: '2px solid var(--bg)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
     fontFamily: 'inherit',
   } as CSSProperties,
 
