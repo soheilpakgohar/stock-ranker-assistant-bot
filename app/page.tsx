@@ -58,7 +58,7 @@ export default function Home() {
             ['calc', 'fa-solid fa-credit-card', 'اقساط'],
             ['inventory', 'fa-solid fa-bag-shopping', 'موجودی'],
             ['contact', 'fa-solid fa-location-dot', 'تماس'],
-            ['apple', 'fa-brands fa-apple', 'اپل'],
+            ['apple', 'fa-brands fa-apple', 'اکانت'],
           ] as [Tab, string, string][]
         ).map(([id, icon, label]) => (
           <button key={id} onClick={() => setTab(id)} style={s.tabBtn(tab === id)}>
